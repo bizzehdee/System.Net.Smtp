@@ -24,6 +24,7 @@
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF 
  * THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
 using System.Text;
 using System.Net.Sockets;
 using System.Net.Security;
@@ -32,300 +33,283 @@ using System.Collections.Generic;
 
 namespace System.Net.Smtp
 {
-  public class SmtpClient
-  {
-    internal TcpClient m_client;
-    internal bool m_use_ssl = false;
-    internal SslStream m_ssl_stream = null;
-    internal NetworkStream m_network_stream = null;
-    internal Stream m_stream = null;
-    internal List<int> m_msg_queue;
-
-    public SmtpClient()
-    {
-      m_client = new TcpClient();
-      m_msg_queue = new List<int>();
-    }
-
-    /// <summary>
-    /// Connect to SMTP server without SSL on port 25
-    /// </summary>
-    /// <param name="server">smtp server to connect to</param>
-    public void Connect(String server)
-    {
-      Connect(server, 25, false);
-    }
-
-    /// <summary>
-    /// Connect to SMTP server without SSL on specified port
-    /// </summary>
-    /// <param name="server">smtp server to connect to</param>
-    /// <param name="port">port number (usually 25)</param>
-    public void Connect(String server, int port)
-    {
-      Connect(server, port, false);
-    }
-
-    /// <summary>
-    /// Connect to SMTP server
-    /// </summary>
-    /// <param name="server">smtp server to connect to</param>
-    /// <param name="port">port number (usually 25)</param>
-    /// <param name="ssl">Use SSL</param>
-    public void Connect(String server, int port, bool ssl)
-    {
-      String m_response = "";
-      m_use_ssl = ssl;
-
-      m_client.Connect(server, port);
-
-      m_network_stream = m_client.GetStream();
-
-      if (m_use_ssl)
-      {
-        m_ssl_stream = new SslStream((Stream)m_network_stream, true);
-
-        try
-        {
-          m_ssl_stream.AuthenticateAsClient(server);
-        }
-        catch (Exception ex)
-        {
-          throw new SmtpException(ex.Message + ". " + "If your using gmail, make sure to use port 465");
-        }
-
-        m_stream = (Stream)m_ssl_stream;
-      }
-      else
-      {
-        m_stream = m_network_stream;
-      }
-
-      m_response = this.Response();
-
-      if (m_response.Substring(0, 3) != "220")
-      {
-        throw new SmtpException(m_response);
-      }
-    }
-
-    /// <summary>
-    /// Send quit message
-    /// </summary>
-    public void Quit()
-    {
-      String m_response = "";
-
-      while (m_msg_queue.Count > 0) Threading.Thread.SpinWait(100);
-
-      this.Write("QUIT");
-
-      m_response = this.Response();
-
-      if (m_response.Substring(0, 3) != "221")
-      {
-        throw new SmtpException(m_response);
-      }
-
-      m_stream.Close();
-      m_client.Close();
-    }
-
-    /// <summary>
-    /// greet server after connect
-    /// </summary>
-    /// <param name="ehlo">Send EHLO instead of HELO</param>
-    public void SayHelo(bool ehlo)
-    {
-      String m_response = "";
-      String m_me = System.Environment.MachineName;
+	public class SmtpClient
+	{
+		private readonly TcpClient _client;
+		private bool _useSSL;
+		private SslStream _sslStream;
+		private NetworkStream _networkStream;
+		private Stream _stream;
+		private readonly List<int> _messageQueue;
+
+		public SmtpClient()
+		{
+			_client = new TcpClient();
+			_messageQueue = new List<int>();
+		}
+
+		/// <summary>
+		/// Connect to SMTP server without SSL on port 25
+		/// </summary>
+		/// <param name="server">smtp server to connect to</param>
+		public void Connect(String server)
+		{
+			Connect(server, 25, false);
+		}
+
+		/// <summary>
+		/// Connect to SMTP server without SSL on specified port
+		/// </summary>
+		/// <param name="server">smtp server to connect to</param>
+		/// <param name="port">port number (usually 25)</param>
+		public void Connect(String server, int port)
+		{
+			Connect(server, port, false);
+		}
+
+		/// <summary>
+		/// Connect to SMTP server
+		/// </summary>
+		/// <param name="server">smtp server to connect to</param>
+		/// <param name="port">port number (usually 25)</param>
+		/// <param name="ssl">Use SSL</param>
+		public void Connect(String server, int port, bool ssl)
+		{
+			_useSSL = ssl;
+
+			_client.Connect(server, port);
+
+			_networkStream = _client.GetStream();
+
+			if (_useSSL)
+			{
+				_sslStream = new SslStream(_networkStream, true);
+
+				try
+				{
+					_sslStream.AuthenticateAsClient(server);
+				}
+				catch (Exception ex)
+				{
+					throw new SmtpException(ex.Message + ". " + "If your using gmail, make sure to use port 465");
+				}
+
+				_stream = _sslStream;
+			}
+			else
+			{
+				_stream = _networkStream;
+			}
+
+			string response = Response();
+
+			if (response.Substring(0, 3) != "220")
+			{
+				throw new SmtpException(response);
+			}
+		}
+
+		/// <summary>
+		/// Send quit message
+		/// </summary>
+		public void Quit()
+		{
+			while (_messageQueue.Count > 0) Threading.Thread.SpinWait(100);
+
+			Write("QUIT");
+
+			string response = Response();
+
+			if (response.Substring(0, 3) != "221")
+			{
+				throw new SmtpException(response);
+			}
+
+			_stream.Close();
+			_client.Close();
+		}
+
+		/// <summary>
+		/// greet server after connect
+		/// </summary>
+		/// <param name="ehlo">Send EHLO instead of HELO</param>
+		public void SayHelo(bool ehlo)
+		{
+			String machineName = Environment.MachineName;
 
-      if (ehlo)
-      {
-        this.Write("EHLO " + m_me);
-      }
-      else
-      {
-        this.Write("HELO " + m_me);
-      }
+			if (ehlo)
+			{
+				Write("EHLO " + machineName);
+			}
+			else
+			{
+				Write("HELO " + machineName);
+			}
 
-      m_response = this.Response();
+			string response = Response();
 
-      if (m_response.Substring(0, 3) != "250")
-      {
-        throw new SmtpException(m_response);
-      }
-    }
+			if (response.Substring(0, 3) != "250")
+			{
+				throw new SmtpException(response);
+			}
+		}
 
 
-    public void SendAuthLogin(String username, String password)
-    {
-      String m_response = "";
-      String m_base64_username = Convert.ToBase64String(ASCIIEncoding.ASCII.GetBytes(username));
-      String m_base64_password = Convert.ToBase64String(ASCIIEncoding.ASCII.GetBytes(password));
+		public void SendAuthLogin(String username, String password)
+		{
+			String base64Username = Convert.ToBase64String(Encoding.ASCII.GetBytes(username));
+			String base64Password = Convert.ToBase64String(Encoding.ASCII.GetBytes(password));
 
-      this.Write("AUTH LOGIN");
+			Write("AUTH LOGIN");
 
-      m_response = this.Response();
+			string response = Response();
 
-      if (m_response.Substring(0, 3) != "334")
-      {
-        throw new SmtpException(m_response);
-      }
+			if (response.Substring(0, 3) != "334")
+			{
+				throw new SmtpException(response);
+			}
 
-      this.Write(m_base64_username);
+			Write(base64Username);
 
-      m_response = this.Response();
+			response = Response();
 
-      if (m_response.Substring(0, 3) != "334")
-      {
-        throw new SmtpException(m_response);
-      }
+			if (response.Substring(0, 3) != "334")
+			{
+				throw new SmtpException(response);
+			}
 
-      this.Write(m_base64_password);
+			Write(base64Password);
 
-      m_response = this.Response();
+			response = Response();
 
-      if (m_response.Substring(0, 3) != "235")
-      {
-        throw new SmtpException(m_response);
-      }
-    }
+			if (response.Substring(0, 3) != "235")
+			{
+				throw new SmtpException(response);
+			}
+		}
 
-    public void SendMailFrom(String from)
-    {
-      String m_response = "";
+		public void SendMailFrom(String from)
+		{
+			Write("MAIL FROM: " + from);
 
-      this.Write("MAIL FROM: " + from);
+			string response = Response();
 
-      m_response = this.Response();
+			if (response.Substring(0, 3) != "250")
+			{
+				throw new SmtpException(response);
+			}
+		}
 
-      if (m_response.Substring(0, 3) != "250")
-      {
-        throw new SmtpException(m_response);
-      }
-    }
+		public void SendRcptTo(String to)
+		{
+			Write("RCPT TO: " + to);
 
-    public void SendRcptTo(String to)
-    {
-      String m_response = "";
+			string response = Response();
 
-      this.Write("RCPT TO: " + to);
+			if (response.Substring(0, 3) != "250")
+			{
+				throw new SmtpException(response);
+			}
+		}
 
-      m_response = this.Response();
+		public void SendData(String data)
+		{
+			Write("DATA");
 
-      if (m_response.Substring(0, 3) != "250")
-      {
-        throw new SmtpException(m_response);
-      }
-    }
-
-    public void SendData(String data)
-    {
-      String m_response = "";
+			string response = Response();
 
-      this.Write("DATA");
-
-      m_response = this.Response();
+			if (response.Substring(0, 3) != "354")
+			{
+				throw new SmtpException(response);
+			}
 
-      if (m_response.Substring(0, 3) != "354")
-      {
-        throw new SmtpException(m_response);
-      }
+			Write(data);
 
-      this.Write(data);
+			Write("\r\n.\r\n");
 
-      this.Write("\r\n.\r\n");
+			response = Response();
 
-      m_response = this.Response();
+			if (response.Substring(0, 3) != "250")
+			{
+				throw new SmtpException(response);
+			}
+		}
 
-      if (m_response.Substring(0, 3) != "250")
-      {
-        throw new SmtpException(m_response);
-      }
-    }
+		public void SendMessage(SmtpMessage msg)
+		{
+			_messageQueue.Add(1);
+			SendMailFrom(msg.From);
+			SendRcptTo(msg.To);
+			SendData(msg.GenerateMessage());
+			_messageQueue.RemoveAt(0);
+		}
 
-    public void SendMessage(SmtpMessage msg)
-    {
-      m_msg_queue.Add(1);
-      this.SendMailFrom(msg.From);
-      this.SendRcptTo(msg.To);
-      this.SendData(msg.GenerateMessage());
-      m_msg_queue.RemoveAt(0);
-    }
+		public void SendMessageAsync(SmtpMessage msg, AsyncCallback cb)
+		{
+			_messageQueue.Add(1);
+			SmtpClientSendMessageAsyncResult messageAsync = new SmtpClientSendMessageAsyncResult { CB = cb, Message = msg };
 
-    public void SendMessageAsync(SmtpMessage msg, AsyncCallback cb)
-    {
-      m_msg_queue.Add(1);
-      SmtpClientSendMessageAsyncResult m_obj = new SmtpClientSendMessageAsyncResult();
-      m_obj.cb = cb;
-      m_obj.Message = msg;
+			Threading.Thread thread = new Threading.Thread(SendMessageAsync_Thread);
+			thread.Start(messageAsync);
+		}
 
-      Threading.Thread m_thread = new Threading.Thread(SendMessageAsync_Thread);
-      m_thread.Start(m_obj);
-    }
+		private void SendMessageAsync_Thread(Object obj)
+		{
+			SmtpClientSendMessageAsyncResult messageAsync = (SmtpClientSendMessageAsyncResult)obj;
 
-    internal void SendMessageAsync_Thread(Object obj)
-    {
-      SmtpClientSendMessageAsyncResult m_obj = (SmtpClientSendMessageAsyncResult)obj;
+			SmtpMessage msg = messageAsync.Message;
 
-      SmtpMessage msg = m_obj.Message;
+			SendMailFrom(msg.From);
+			SendRcptTo(msg.To);
+			SendData(msg.GenerateMessage());
 
-      this.SendMailFrom(msg.From);
-      this.SendRcptTo(msg.To);
-      this.SendData(msg.GenerateMessage());
+			if(messageAsync.CB != null) messageAsync.CB.Invoke(messageAsync);
 
-      if(m_obj.cb != null) m_obj.cb.Invoke(m_obj);
+			_messageQueue.RemoveAt(0);
+		}
 
-      m_msg_queue.RemoveAt(0);
-    }
+		#region Internals
 
-    #region Internals
+		private void Write(String str)
+		{
+			ASCIIEncoding encoding = new ASCIIEncoding();
 
-    internal void Write(String str)
-    {
-      ASCIIEncoding m_enc = new ASCIIEncoding();
-      byte[] m_buf = new byte[1024];
+			if (!str.EndsWith("\r\n")) str += "\r\n";
 
-      if (!str.EndsWith("\r\n")) str += "\r\n";
+			byte[] bufferBytes = encoding.GetBytes(str);
 
-      m_buf = m_enc.GetBytes(str);
+			_stream.Write(bufferBytes, 0, bufferBytes.Length);
+		}
 
-      m_stream.Write(m_buf, 0, m_buf.Length);
-    }
+		private string Response()
+		{
+			ASCIIEncoding encoding = new ASCIIEncoding();
+			byte[] bufferBytes = new byte[1024];
+			int count = 0;
 
-    internal string Response()
-    {
-      String m_ret = "";
-      ASCIIEncoding m_enc = new ASCIIEncoding();
-      byte[] m_buf = new byte[1024];
-      int m_count = 0;
+			while (true)
+			{
+				byte[] receiveBuffer = new byte[2];
+				int byteCount = _stream.Read(receiveBuffer, 0, 1);
+				if (byteCount == 1)
+				{
+					bufferBytes[count] = receiveBuffer[0];
+					count++;
 
-      while (true)
-      {
-        byte[] m_rbuf = new byte[2];
-        int m_bytes = m_stream.Read(m_rbuf, 0, 1);
-        if (m_bytes == 1)
-        {
-          m_buf[m_count] = m_rbuf[0];
-          m_count++;
+					if (receiveBuffer[0] == '\n')
+					{
+						break;
+					}
+				}
+				else
+				{
+					break;
+				}
+			}
 
-          if (m_rbuf[0] == '\n')
-          {
-            break;
-          }
-        }
-        else
-        {
-          break;
-        }
-      }
+			return encoding.GetString(bufferBytes, 0, count);
+		}
 
-      m_ret = m_enc.GetString(m_buf, 0, m_count);
-
-      return m_ret;
-    }
-
-    #endregion
-  }
+		#endregion
+	}
 }

@@ -26,12 +26,12 @@
  */
 namespace System.Net.Smtp
 {
-  public class SmtpException : System.Exception
-  {
-    public SmtpException(String e)
-      : base(e)
-    {
+	public class SmtpException : System.Exception
+	{
+		public SmtpException(String e)
+			: base(e)
+		{
 
-    }
-  }
+		}
+	}
 }

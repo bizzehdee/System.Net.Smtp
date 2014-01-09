@@ -24,77 +24,74 @@
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF 
  * THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-using System;
-using System.Collections.Generic;
+
 using System.Text;
 using System.IO;
-using System.Text.RegularExpressions;
 
 namespace System.Net.Smtp
 {
-  public class SmtpAttachment
-  {
-    public String FileName { get; set; }
-    public String FileNameShort { get; set; }
+	public class SmtpAttachment
+	{
+		public String FileName { get; set; }
+		public String FileNameShort { get; set; }
 
-    public SmtpAttachment()
-    {
-      FileName = "";
-    }
+		public SmtpAttachment()
+		{
+			FileName = "";
+		}
 
-    public SmtpAttachment(String file)
-    {
-      LoadFile(file);
-    }
+		public SmtpAttachment(String file)
+		{
+			LoadFile(file);
+		}
 
-    public void LoadFile(String file)
-    {
-      FileName = file;
-      FileNameShort = FileName.Substring(FileName.LastIndexOf('\\')+1);
-    }
+		public void LoadFile(String file)
+		{
+			FileName = file;
+			FileNameShort = FileName.Substring(FileName.LastIndexOf('\\')+1);
+		}
 
-    public Int32 GetFileSize()
-    {
-      if (File.Exists(FileName))
-      {
-        FileInfo m_info = new FileInfo(FileName);
-        return (Int32)m_info.Length;
-      }
-      return 0;
-    }
+		public Int32 GetFileSize()
+		{
+			if (!File.Exists(FileName)) return 0;
 
-    public String GetBase64()
-    {
-      if (File.Exists(FileName))
-      {
-        byte[] m_bytes = File.ReadAllBytes(FileName);
-        String m_file_base64 = Convert.ToBase64String(m_bytes);
+			FileInfo fileInfo = new FileInfo(FileName);
+			return (Int32)fileInfo.Length;
+		}
 
-        StringBuilder m_full = new StringBuilder();
-        Int32 m_len = m_file_base64.Length;
-        for (int i = 0; i < (m_len); i+=76)
-        {
-          m_full.AppendLine(m_file_base64.Substring(i, Math.Min(76, m_len - i)));
-        }
+		public String GetBase64()
+		{
+			if (!File.Exists(FileName)) return "";
 
-        return m_full.ToString();
-      }
+			byte[] fileBytes = File.ReadAllBytes(FileName);
+			String fileBase64 = Convert.ToBase64String(fileBytes);
 
-      return "";
-    }
+			StringBuilder base64Wrapped = new StringBuilder();
+			Int32 base64Length = fileBase64.Length;
+			for (int i = 0; i < (base64Length); i+=76)
+			{
+				base64Wrapped.AppendLine(fileBase64.Substring(i, Math.Min(76, base64Length - i)));
+			}
 
-    public String GetMimeType()
-    {
-      String m_mime = "application/unknown";
-      String m_ext = System.IO.Path.GetExtension(FileName).ToLower();
+			return base64Wrapped.ToString();
+		}
 
-      Microsoft.Win32.RegistryKey regKey = Microsoft.Win32.Registry.ClassesRoot.OpenSubKey(m_ext);
-      if (regKey != null && regKey.GetValue("Content Type") != null)
-      {
-        m_mime = regKey.GetValue("Content Type").ToString();
-      }
-      return m_mime;
-    }
+		public String GetMimeType()
+		{
+			String mimeType = "application/unknown";
+			string extension = Path.GetExtension(FileName);
 
-  }
+			if (extension == null) return mimeType;
+
+			String fileExtension = extension.ToLower();
+			Microsoft.Win32.RegistryKey regKey = Microsoft.Win32.Registry.ClassesRoot.OpenSubKey(fileExtension);
+			if (regKey != null && regKey.GetValue("Content Type") != null)
+			{
+				mimeType = regKey.GetValue("Content Type").ToString();
+			}
+
+			return mimeType;
+		}
+
+	}
 }

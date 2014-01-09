@@ -26,23 +26,23 @@
  */
 namespace System.Net.Smtp
 {
-  public class SmtpHeader
-  {
-    internal String[] m_restricted = {
-      "to", "from", "reply-to", "subject", "content-type", "mime-version"
-                                     };
-    public String Name { get; set; }
-    public String Value { get; set; }
+	public class SmtpHeader
+	{
+		private readonly String[] _restricted = {
+			"to", "from", "reply-to", "subject", "content-type", "mime-version"
+																		 };
+		public String Name { get; set; }
+		public String Value { get; set; }
 
-    public SmtpHeader(String n, String v)
-    {
-      foreach (String r in m_restricted)
-      {
-        if (r == n.ToLower()) throw new SmtpException(n + ": restricted header");
-      }
+		public SmtpHeader(String n, String v)
+		{
+			foreach (String r in _restricted)
+			{
+				if (r == n.ToLower()) throw new SmtpException(n + ": restricted header");
+			}
 
-      Name = n;
-      Value = v;
-    }
-  }
+			Name = n;
+			Value = v;
+		}
+	}
 }
